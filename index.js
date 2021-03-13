@@ -1,9 +1,7 @@
-const http = require('http')
-const express = require('express')
-const {graphql, buildSchema} = require('graphql')
-const graphqlHTTP = require('express-graphql')
-const cars =
-    [
+const { ApolloServer, gql } = require('apollo-server')
+
+const db = {
+    cars: [
         {
             id: 'a',
             brand: 'Ford',
@@ -33,10 +31,10 @@ const cars =
             type: 'Coupe'
         }
     ]
+}
 
-
-// GRAPHQL:SCHEMA creator
-const schema = buildSchema(`
+// create the schema
+const schema = gql(` 
 enum CarTypes {
    Sedan
    SUV
@@ -52,55 +50,45 @@ enum CarTypes {
   type Query {
     carsByType(type:CarTypes!): [Car]
     carsById(id:ID!): Car
-    carsBySomething(id:ID!): Car
   }
-  type Mutation {
+   type Mutation {
     insertCar(brand: String!, color: String!, doors: Int!, type:CarTypes!): [Car]!
   }
 `)
 
-// GRAPHQL:RESOLVERS creator
-const resolvers = () => {
-
-    const carsByType = args => {
-        return cars.filter(car => car.type === args.type)
+// create the resolvers
+const resolvers = {
+    Query: {
+        carsByType: (parent, args, context, info) => {
+            return db.cars.filter(car => car.type === args.type)
+        },
+        carsById: (parent, args, context, info) => {
+            return db.cars.filter(car => car.id === args.id)[0]
+        }
+    },
+    Car: {
+        brand: (parent, args, context, info) => {
+            return db.cars.filter(car => car.brand === parent.brand)[0].brand
+        }
+    },
+    Mutation: {
+        insertCar: (_, { brand, color, doors, type }) => {
+            db.cars.push({
+                id: Math.random().toString(),
+                brand: brand,
+                color: color,
+                doors: doors,
+                type: type
+            })
+            return db.cars
+        }
     }
-    const carsById = args => {
-        return cars.filter(car => car.id === args.id)[0]
-    }
-    const insertCar = ({brand, color, doors, type}) => {
-        cars.push({
-            id: Math.random().toString(),
-            brand: brand,
-            color: color,
-            doors: doors,
-            type: type
-        })
-        return cars
-    }
-
-    return {carsByType, carsById, insertCar}
 }
-
-
-// EXPRESS SERVER
-const app = express()
-app.use('/graphql',
-    graphqlHTTP({schema: schema, rootValue: resolvers(), graphiql: true}))
-app.use('/', function (req, res) {
-    res.end('DONE: You are using server which is running with GraphQl')
+const server = new ApolloServer({
+    typeDefs: schema,
+    resolvers
 })
 
-const server = http.createServer(app)
-server.listen(4000, function () {
-    console.log('Express built with express-graphql is running on the port 4000!')
+server.listen().then(({ url }) => {
+    console.log(`🚀  Server ready at ${url}`)
 })
-
-
-
-
-
-// Getting started the apollo server
-
-
-
