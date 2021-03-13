@@ -98,3 +98,9 @@ server.listen(4000, function () {
 
 
 
+
+
+// Getting started the apollo server
+
+
+
