@@ -1,5 +1,6 @@
-const { ApolloServer, gql } = require('apollo-server')
+const { ApolloServer, gql, PubSub} = require('apollo-server')
 const {RESTDataSource} = require('apollo-datasource-rest')
+const pubSub = new PubSub()
 const app = require('./app')
 
 const cars = [
@@ -59,7 +60,7 @@ const schema = gql(`
        cars: [Car]
     }
     type Cars {
-      cars:[Car]
+      cars:[Car] 
     }
     type APICar {
       id: ID!
@@ -79,6 +80,9 @@ const schema = gql(`
     type Mutation {
       insertCar(brand: String!, color: String!, doors: Int!, type:CarTypes!): [Car]!
     }
+    type Subscription {
+        carInserted: Car
+     }
 `)
 
 // build RESOLVERS
@@ -126,16 +130,28 @@ const resolvers = {
     },
     Mutation: {
         insertCar: (_, {brand, color, doors, type}, context) => {
-            context.cars.push({
+            const car = {
                 id: Math.random().toString(),
                 brand: brand,
                 color: color,
                 doors: doors,
                 type: type
-            })
+            }
+            context.cars.push(car)
+            // publishing event for subscribed users
+            pubSub.publish('CAR_INSERTED_EVENT', {
+                carInserted: car
+            }).then(() => "DONE")
             return context.cars
         }
+    },
+    Subscription: {
+        carInserted: {
+            subscribe: () => pubSub.asyncIterator(['CAR_INSERTED_EVENT'])
+         }
     }
+
+
 }
 
 
