@@ -1,4 +1,5 @@
-const { ApolloServer, gql } = require('apollo-server')
+const {ApolloServer, gql} = require('apollo-server')
+const express = require('express')
 
 const db = {
     cars: [
@@ -33,6 +34,7 @@ const db = {
     ]
 }
 
+
 // building SCHEMA
 const schema = gql(` 
 enum CarTypes {
@@ -50,6 +52,7 @@ enum CarTypes {
   type Query {
     carsByType(type:CarTypes!): [Car]
     carsById(id:ID!): Car
+    CarsThroughAPI: Car
   }
    type Mutation {
     insertCar(brand: String!, color: String!, doors: Int!, type:CarTypes!): [Car]!
@@ -64,10 +67,13 @@ const resolvers = {
         },
         carsById: (parent, args, context, info) => {
             return context.db.cars.filter(car => car.id === args.id)[0]
+        },
+        CarsThroughAPI: async (parent, args, context, info) => {
+            return await context.dataSources.carDataAPI.getCar()
         }
     },
     Mutation: {
-        insertCar: (_, { brand, color, doors, type }, context) => {
+        insertCar: (_, {brand, color, doors, type}, context) => {
             context.db.cars.push({
                 id: Math.random().toString(),
                 brand: brand,
@@ -92,10 +98,45 @@ const dbConnection = () => {
 const server = new ApolloServer({
     typeDefs: schema,
     resolvers,
+    dataSources: () => {
+        return {
+            carDataAPI: new CarDataAPI()
+        }
+    },
     context: async () => {
         return {db: await dbConnection()}
     }
 })
-server.listen().then(({ url }) => {
+server.listen().then(({url}) => {
     console.log(`🚀  Server ready at ${url}`)
+})
+
+
+
+// INTERACT with API Calls
+const {RESTDataSource} = require('apollo-datasource-rest')
+
+class CarDataAPI extends RESTDataSource {
+    async getCar() {
+        const data = await this.get('http://localhost:3000/carData')
+        return data
+    }
+}
+
+
+
+// BUILDING EXPRESS SERVER AND LISTENING TO IT
+const app = express()
+app.get('/carData', function (req, res) {
+    res.json({
+        id: "x",
+        brand: "Mustang",
+        color: "yellow",
+        doors: 2,
+        type: "Coupe"
+    })
+})
+
+app.listen(3000, function () {
+    console.log('Listening to express server on 3000!')
 })
