@@ -206,3 +206,9 @@ app.listen(3000, function () {
 
 
 
+
+
+
+
+// next creating merge of Schemas and Resolvers
+
