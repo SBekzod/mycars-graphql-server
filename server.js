@@ -1,214 +1,134 @@
-const { ApolloServer, gql, PubSub} = require('apollo-server')
-const {RESTDataSource} = require('apollo-datasource-rest')
-const pubSub = new PubSub()
-const app = require('./app')
+const { ApolloServer, gql } = require('apollo-server')
+const { makeExecutableSchema, mergeSchemas } = require('graphql-tools')
+const { merge } = require('lodash')
 
-const cars = [
-    {
-        id: '1',
-        brand: 'Toyota Corola',
-        color: 'Blue',
-        doors: 4,
-        type: 'Sedan',
-        parts: [{ id: '1' }, { id: '2' }]
-    },
-    {
-        id: '2',
-        brand: 'Toyota Camry',
-        color: 'Red',
-        doors: 4,
-        type: 'SUV',
-        parts: [{ id: '1' }, { id: '3' }]
-    }
-]
-const parts = [
-    {
-        id: '1',
-        name: 'Transmission',
-        cars: [{ id: '1' }, { id: '2' }]
-    },
-    {
-        id: '2',
-        name: 'Suspension',
-        cars: [{ id: '1' }]
-    },
-    {
-        id: '3',
-        name: 'Break',
-        cars: [{ id: '2' }]
-    }
-]
+// create a memory db
+const db = {
+    cars: [
+        {
+            id: 'a',
+            brand: 'Ford',
+            color: 'Blue',
+            doors: 4,
+            type: 'Sedan'
+        },
+        {
+            id: 'b',
+            brand: 'Tesla',
+            color: 'Red',
+            doors: 4,
+            type: 'SUV'
+        },
+        {
+            id: 'c',
+            brand: 'Toyota',
+            color: 'White',
+            doors: 4,
+            type: 'Coupe'
+        },
+        {
+            id: 'd',
+            brand: 'Toyota',
+            color: 'Red',
+            doors: 4,
+            type: 'Coupe'
+        }
+    ]
+}
 
-// build SCHEMA
-const schema = gql(` 
+// build SCHEMAS
+const carEnum = `
     enum CarTypes {
-       Sedan
-       SUV
-       Coupe
+      Sedan
+      SUV
+      Coupe
     }
-    type Car {
+`
+const carType = `
+     type Car {
       id: ID!
       brand: String!
       color: String!
       doors: Int!
       type: CarTypes!
-      parts:[Part]
     }
-    type Part {
-       id: ID!
-       name: String
-       cars: [Car]
-    }
-    type Cars {
-      cars:[Car] 
-    }
-    type APICar {
-      id: ID!
-      brand: String!
-      color: String!
-      doors: Int!
-      type: CarTypes!
-      parts:[Part]
-    }
-    
-    type Query {
-      carsByType(type:CarTypes!): [Car]
-      carsById(id:ID!): Car
-      partsById(id:ID!): Part
-      carThroughAPI: APICar 
-    }
-    type Mutation {
-      insertCar(brand: String!, color: String!, doors: Int!, type:CarTypes!): [Car]!
-    }
-    type Subscription {
-        carInserted: Car
-     }
-`)
+`
+
+const carQueries = `
+  type Query {
+    carsById(id:ID!): Car
+    carsByType(type:CarTypes!): [Car]
+  }
+
+  type Mutation {
+    insertCar(brand: String!, color: String!, doors: Int!, type:CarTypes!): [Car]!
+  }
+`
 
 // build RESOLVERS
-const resolvers = {
+const carResolversQueries = {
     Query: {
-        carsById: (parent, args, context, info) => args,
-        carsByType: (parent, args, context, info) => args,
-        partsById: (parent, args, context, info) => args,
-        carThroughAPI: async (parent, args, context, info) => {
-            return await context.dataSources.carThroughAPI.getCar()
+        carsByType: (parent, args, context, info) => {
+            return db.cars.filter(car => car.type === args.type)
+        },
+        carsById: (parent, args, context, info) => {
+            return db.cars.filter(car => car.id === args.id)[0]
         }
-    },
-    Part: {
-        name: (parent, args, context, info) => {
-            if (context.parts.filter(part => part.id === parent.id)[0]) {
-                return parts.filter(part => part.id === parent.id)[0].name
-            }
-            return null
-        },
-        cars: (parent, args, context, info) => {
-            return context.parts.filter(part => part.id === parent.id)[0].cars
-        }
-    },
-    Car: {
-        brand: (parent, args, context, info) => {
-            return context.cars.filter(car => car.id === parent.id)[0].brand
-        },
-        type: (parent, args, context, info) => {
-            return context.cars.filter(car => car.id === parent.id)[0].type
-        },
-        color: (parent, args, context, info) => {
-            return context.cars.filter(car => car.id === parent.id)[0].color
-        },
-        doors: (parent, args, context, info) => {
-            return context.cars.filter(car => car.id === parent.id)[0].doors
-        },
-        parts: (parent, args, context, info) => {
-            return context.cars.filter(car => car.id === parent.id)[0].parts
-        }
-    },
-    Cars: {
-        cars: (parent, args, context, info) => {
-            return context.cars.filter(car => car.type === parent.type)
-        }
-    },
+    }
+}
+const carResolversMutations = {
     Mutation: {
-        insertCar: (_, {brand, color, doors, type}, context) => {
-            const car = {
+        insertCar: (_, { brand, color, doors, type }) => {
+            db.cars.push({
                 id: Math.random().toString(),
                 brand: brand,
                 color: color,
                 doors: doors,
                 type: type
-            }
-            context.cars.push(car)
-            // publishing event for subscribed users
-            pubSub.publish('CAR_INSERTED_EVENT', {
-                carInserted: car
-            }).then(() => "DONE")
-            return context.cars
+            })
+            return db.cars
         }
-    },
-    Subscription: {
-        carInserted: {
-            subscribe: () => pubSub.asyncIterator(['CAR_INSERTED_EVENT'])
-         }
     }
-
-
+}
+const dealership = `
+    type Dealership {
+      name: String
+      city: String
+    }
+    type Query{
+      dealership: Dealership
+    }
+`
+const dealershipResolvers = {
+    Query: {
+        dealership: (parent, args, context, info) => {
+            return {
+                name: 'Honda',
+                city: 'Calgary'
+            }
+        }
+    }
 }
 
 
-const dbCarConnection = () => {
-    return new Promise((resolve, reject) => {
-        setTimeout(function () {
-            return resolve(cars)
-        }, 100)
-    })
-}
-const dbPartsConnection = () => {
-    return new Promise((resolve, reject) => {
-        setTimeout(function () {
-            return resolve(parts)
-        }, 100)
-    })
-}
+// APOLLO MERGING
+const carsSchema = makeExecutableSchema({
+    typeDefs: [carQueries, carEnum, carType],
+    resolvers: merge(carResolversMutations, carResolversQueries)
+})
+const dealershipSchema = makeExecutableSchema({
+    typeDefs: [dealership],
+    resolvers: dealershipResolvers
+})
+const mergedSchema = mergeSchemas({
+    schemas: [carsSchema, dealershipSchema]
+})
+
 
 // APOLLO SERVER
 const server = new ApolloServer({
-    typeDefs: schema,
-    resolvers,
-    dataSources: () => {
-        return {
-            carThroughAPI: new CarDataAPI()
-        }
-    },
-    context: async () => {
-        return {cars: await dbCarConnection(), parts: await dbPartsConnection()}
-    }
+    schema: mergedSchema
 })
 server.listen().then(({ url }) => {
     console.log(`🚀  Server ready at ${url}`)
 })
-
-
-
-// INTERACT with API Calls
-class CarDataAPI extends RESTDataSource {
-    async getCar() {
-        const data = await this.get('http://localhost:3000/carData')
-        return data
-    }
-}
-
-
-
-// EXPRESS SERVER
-app.listen(3000, function () {
-    console.log('Listening to express server on 3000!')
-})
-
-
-
-
-
-
-
-// next creating merge of Schemas and Resolvers
-
