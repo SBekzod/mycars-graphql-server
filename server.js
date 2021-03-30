@@ -3,6 +3,10 @@ const {RESTDataSource} = require('apollo-datasource-rest')
 const pubSub = new PubSub()
 const app = require('./app')
 
+
+
+
+
 const cars = [
     {
         id: '1',
@@ -38,6 +42,25 @@ const parts = [
         cars: [{ id: '2' }]
     }
 ]
+
+const dbCarConnection = () => {
+    return new Promise((resolve, reject) => {
+        setTimeout(function () {
+            return resolve(cars)
+        }, 100)
+    })
+}
+const dbPartsConnection = () => {
+    return new Promise((resolve, reject) => {
+        setTimeout(function () {
+            return resolve(parts)
+        }, 100)
+    })
+}
+
+
+
+
 
 // build SCHEMA
 const schema = gql(` 
@@ -148,26 +171,10 @@ const resolvers = {
     Subscription: {
         carInserted: {
             subscribe: () => pubSub.asyncIterator(['CAR_INSERTED_EVENT'])
-         }
+        }
     }
 
 
-}
-
-
-const dbCarConnection = () => {
-    return new Promise((resolve, reject) => {
-        setTimeout(function () {
-            return resolve(cars)
-        }, 100)
-    })
-}
-const dbPartsConnection = () => {
-    return new Promise((resolve, reject) => {
-        setTimeout(function () {
-            return resolve(parts)
-        }, 100)
-    })
 }
 
 // APOLLO SERVER
@@ -189,6 +196,8 @@ server.listen().then(({ url }) => {
 
 
 
+
+
 // INTERACT with API Calls
 class CarDataAPI extends RESTDataSource {
     async getCar() {
@@ -196,8 +205,6 @@ class CarDataAPI extends RESTDataSource {
         return data
     }
 }
-
-
 
 // EXPRESS SERVER
 app.listen(3000, function () {

@@ -1,0 +1,24 @@
+
+
+query {
+  carsById(id: "2") {
+    brand
+  }
+}
+
+
+mutation {
+  insertCar(brand: "MONO", color: "Green", doors: 4, type: Sedan) {
+    id
+    brand
+    color
+    doors
+  }
+}
+
+
+subscription {
+  carInserted {
+    brand
+  }
+}
